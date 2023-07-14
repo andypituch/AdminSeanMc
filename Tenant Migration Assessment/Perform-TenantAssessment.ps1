@@ -101,7 +101,7 @@ Try {
     import-module importexcel
 }
 catch {
-    clear
+    Clear-Host
     write-host "Could not import modules, make sure you have the following modules available`nMSAL.PS`nExchangeOnlineManagement`n`nThese modules can be installed by running the following commands:`nInstall-Module MSAL.PS`n`nInstall-Module ExchangeOnlineManagement" -ForegroundColor red
     exit
 }
@@ -124,10 +124,12 @@ $ProgressStatus = "Preparing environment..."
 UpdateProgress
 $ProgressTracker++
 
+$tenantDomain = $($(Get-AcceptedDomain | Where-Object { $_.InitialDomain } | Select-Object -ExpandProperty domainname) -split "\.")[0]
+
 ##Declare URI
 $apiuri = $null
 ##Report File Name
-$Filename = "TenantAssessment-$((get-date).tostring().replace('/','').replace(':','')).xlsx"
+$Filename = "TenantAssessment-$tenantDomain-$(get-date -Format FileDateTime).xlsx"
 ##File Location
 $FilePath = "C:\temp"
 Try {
@@ -168,7 +170,7 @@ UpdateProgress
 $ProgressTracker++
 
 ##Get Teams details
-$TeamGroups = $Groups | ? { ($_.grouptypes -Contains "unified") -and ($_.resourceProvisioningOptions -contains "Team") }
+$TeamGroups = $Groups | Where-Object { ($_.grouptypes -Contains "unified") -and ($_.resourceProvisioningOptions -contains "Team") }
 
 $i = 1
 
@@ -180,10 +182,10 @@ foreach ($teamgroup in $TeamGroups) {
 
     $apiuri = "https://graph.microsoft.com/beta/teams/$($teamgroup.id)/allchannels"
     $Teamchannels = RunQueryandEnumerateResults
-    $standardchannels = ($teamchannels | ? { $_.membershipType -eq "standard" })
-    $privatechannels = ($teamchannels | ? { $_.membershipType -eq "private" })
-    $outgoingsharedchannels = ($teamchannels | ? { ($_.membershipType -eq "shared") -and (($_."@odata.id") -like "*$($teamgroup.id)*") })
-    $incomingsharedchannels = ($teamchannels | ? { ($_.membershipType -eq "shared") -and ($_."@odata.id" -notlike "*$($teamgroup.id)*") })
+    $standardchannels = ($teamchannels | Where-Object { $_.membershipType -eq "standard" })
+    $privatechannels = ($teamchannels | Where-Object { $_.membershipType -eq "private" })
+    $outgoingsharedchannels = ($teamchannels | Where-Object { ($_.membershipType -eq "shared") -and (($_."@odata.id") -like "*$($teamgroup.id)*") })
+    $incomingsharedchannels = ($teamchannels | Where-Object { ($_.membershipType -eq "shared") -and ($_."@odata.id" -notlike "*$($teamgroup.id)*") })
     $teamgroup | Add-Member -MemberType NoteProperty -Name "StandardChannels" -Value $standardchannels.id.count -Force
     $teamgroup | Add-Member -MemberType NoteProperty -Name "PrivateChannels" -Value $privatechannels.id.count -Force
     $teamgroup | Add-Member -MemberType NoteProperty -Name "SharedChannels" -Value $outgoingsharedchannels.id.count -Force
@@ -417,7 +419,7 @@ $SharePoint | Add-Member -MemberType NoteProperty -Name "TeamID" -Value "" -forc
 foreach ($Site in $Sharepoint) {
 
     $TeamID = $null
-    $Site.TeamID = ($TeamGroups | ? { $_.url -contains $site.'site url' }).id
+    $Site.TeamID = ($TeamGroups | Where-Object { $_.url -contains $site.'site url' }).id
 
 
 }
@@ -508,7 +510,7 @@ UpdateProgress
 $ProgressTracker++
 
 Try {
-    Connect-ExchangeOnline -Certificate $Certificate -AppID $clientid -Organization ($orgdetails.verifieddomains | ? { $_.isinitial -eq "true" }).name -ShowBanner:$false
+    Connect-ExchangeOnline -Certificate $Certificate -AppID $clientid -Organization ($orgdetails.verifieddomains | Where-Object { $_.isinitial -eq "true" }).name -ShowBanner:$false
 }
 catch {
     write-host "Error connecting to Exchange Online...Exiting..." -ForegroundColor red
@@ -594,9 +596,9 @@ $ProgressTracker++
 
 ##Collect Mailbox statistics
 $MailboxStats = @()
-foreach ($user in ($users | ? { ($_.mail -ne $null ) -and ($_.userType -eq "Member") })) {
+foreach ($user in ($users | Where-Object { ($_.mail -ne $null ) -and ($_.userType -eq "Member") })) {
     $stats = $null
-    $stats = $MailboxStatsReport | ? { $_.'User Principal Name' -eq $user.userprincipalname }
+    $stats = $MailboxStatsReport | Where-Object { $_.'User Principal Name' -eq $user.userprincipalname }
     $stats | Add-Member -MemberType NoteProperty -Name ObjectID -Value $user.id -Force
     $stats | Add-Member -MemberType NoteProperty -Name Primarysmtpaddress -Value $user.mail -Force
     $MailboxStats += $stats
@@ -632,7 +634,7 @@ $ProgressTracker++
 ##Collect Mail Contacts
 ##Collect transport rules
 
-$MailContacts = Get-MailContact -ResultSize unlimited | select displayname, alias, externalemailaddress, emailaddresses, HiddenFromAddressListsEnabled
+$MailContacts = Get-MailContact -ResultSize unlimited | Select-Object displayname, alias, externalemailaddress, emailaddresses, HiddenFromAddressListsEnabled
 foreach ($mailcontact in $MailContacts) {
     $mailcontact.emailaddresses = $mailcontact.emailaddresses -join ';'
 }
@@ -644,7 +646,7 @@ $ProgressTracker++
 ##Collect transport rules
 
 $Rules = $null
-[array]$Rules = Get-TransportRule -ResultSize unlimited | select name, state, mode, priority, description, comments
+[array]$Rules = Get-TransportRule -ResultSize unlimited | Select-Object name, state, mode, priority, description, comments
 $RulesOutput = @()
 ##Output rules to variable
 foreach ($Rule in $Rules) {
@@ -670,7 +672,7 @@ If ($IncludeMailboxPermissions) {
 
         
 
-        [array]$Permissions = Get-EXOMailboxPermission -UserPrincipalName $mailbox.UserPrincipalName | ? { $_.User -ne "NT AUTHORITY\SELF" }
+        [array]$Permissions = Get-EXOMailboxPermission -UserPrincipalName $mailbox.UserPrincipalName | Where-Object { $_.User -ne "NT AUTHORITY\SELF" }
 
         foreach ($permission in $Permissions) {
 
@@ -687,7 +689,7 @@ If ($IncludeMailboxPermissions) {
             $PermissionOutput += $PermissionObject
         }
 
-        [array]$RecipientPermissions = Get-EXORecipientPermission $mailbox.UserPrincipalName |  ? { $_.Trustee -ne "NT AUTHORITY\SELF" }
+        [array]$RecipientPermissions = Get-EXORecipientPermission $mailbox.UserPrincipalName |  Where-Object { $_.Trustee -ne "NT AUTHORITY\SELF" }
 
         foreach ($permission in $RecipientPermissions) {
 
@@ -718,12 +720,12 @@ $ProgressTracker++
 
 ##Collect Mailflow Connectors
 
-$InboundConnectors = Get-InboundConnector | select enabled, name, connectortype, connectorsource, SenderIPAddresses, SenderDomains, RequireTLS, RestrictDomainsToIPAddresses, RestrictDomainsToCertificate, CloudServicesMailEnabled, TreatMessagesAsInternal, TlsSenderCertificateName, EFTestMode, Comment 
+$InboundConnectors = Get-InboundConnector | Select-Object enabled, name, connectortype, connectorsource, SenderIPAddresses, SenderDomains, RequireTLS, RestrictDomainsToIPAddresses, RestrictDomainsToCertificate, CloudServicesMailEnabled, TreatMessagesAsInternal, TlsSenderCertificateName, EFTestMode, Comment 
 foreach ($inboundconnector in $InboundConnectors) {
     $inboundconnector.senderipaddresses = $inboundconnector.senderipaddresses -join ';'
     $inboundconnector.senderdomains = $inboundconnector.senderdomains -join ';'
 }
-$OutboundConnectors = Get-OutboundConnector -IncludeTestModeConnectors:$true | select enabled, name, connectortype, connectorsource, TLSSettings, RecipientDomains, UseMXRecord, SmartHosts, Comment
+$OutboundConnectors = Get-OutboundConnector -IncludeTestModeConnectors:$true | Select-Object enabled, name, connectortype, connectorsource, TLSSettings, RecipientDomains, UseMXRecord, SmartHosts, Comment
 foreach ($OutboundConnector in $OutboundConnectors) {
     $OutboundConnector.RecipientDomains = $OutboundConnector.RecipientDomains -join ';'
     $OutboundConnector.SmartHosts = $OutboundConnector.SmartHosts -join ';'
@@ -759,7 +761,7 @@ $users | Add-Member -MemberType NoteProperty -Name ArchiveSizeGB -Value "" -Forc
 $users | Add-Member -MemberType NoteProperty -Name Mailboxtype -Value "" -Force
 $users | Add-Member -MemberType NoteProperty -Name ArchiveItemCount -Value "" -Force
 
-foreach ($user in ($users | ? { $_.usertype -ne "Guest" })) {
+foreach ($user in ($users | Where-Object { $_.usertype -ne "Guest" })) {
     ##Set Mailbox Type
     if ($roommailboxes.ExternalDirectoryObjectId -contains $user.id) {
         $user.Mailboxtype = "Room"
@@ -775,54 +777,54 @@ foreach ($user in ($users | ? { $_.usertype -ne "Guest" })) {
     }
 
     ##Set Mailbox Size and count
-    If ($MailboxStats | ? { $_.objectID -eq $user.id }) {
-        $user.MailboxSizeGB = (((($MailboxStats | ? { $_.objectID -eq $user.id }).'Storage Used (Byte)' / 1024) / 1024) / 1024) 
+    If ($MailboxStats | Where-Object { $_.objectID -eq $user.id }) {
+        $user.MailboxSizeGB = (((($MailboxStats | Where-Object { $_.objectID -eq $user.id }).'Storage Used (Byte)' / 1024) / 1024) / 1024) 
         $user.MailboxSizeGB = [math]::Round($user.MailboxSizeGB, 2)
-        $user.MailboxItemCount = ($MailboxStats | ? { $_.objectID -eq $user.id }).'item count'
+        $user.MailboxItemCount = ($MailboxStats | Where-Object { $_.objectID -eq $user.id }).'item count'
     }
 
     ##Set Shared Mailbox size and count
-    If ($SharedMailboxes | ? { $_.ExternalDirectoryObjectId -eq $user.id }) {
-        if (($SharedMailboxes | ? { $_.ExternalDirectoryObjectId -eq $user.id }).mailboxsize) {
-            $user.MailboxSizeGB = (((($SharedMailboxes | ? { $_.ExternalDirectoryObjectId -eq $user.id }).mailboxsize.value.tostring().replace(',', '').replace(' ', '').split('b')[0].split('(')[1] / 1024) / 1024) / 1024) 
+    If ($SharedMailboxes | Where-Object { $_.ExternalDirectoryObjectId -eq $user.id }) {
+        if (($SharedMailboxes | Where-Object { $_.ExternalDirectoryObjectId -eq $user.id }).mailboxsize) {
+            $user.MailboxSizeGB = (((($SharedMailboxes | Where-Object { $_.ExternalDirectoryObjectId -eq $user.id }).mailboxsize.value.tostring().replace(',', '').replace(' ', '').split('b')[0].split('(')[1] / 1024) / 1024) / 1024) 
             $user.MailboxSizeGB = [math]::Round($user.MailboxSizeGB, 2)
-            $user.MailboxItemCount = ($SharedMailboxes | ? { $_.ExternalDirectoryObjectId -eq $user.id }).ItemCount
+            $user.MailboxItemCount = ($SharedMailboxes | Where-Object { $_.ExternalDirectoryObjectId -eq $user.id }).ItemCount
         }
     }
 
     ##Set Equipment Mailbox size and count
-    If ($EquipmentMailboxes | ? { $_.ExternalDirectoryObjectId -eq $user.id }) {
-        if (($EquipmentMailboxes | ? { $_.ExternalDirectoryObjectId -eq $user.id }).mailboxsize) {
-            $user.MailboxSizeGB = (((($EquipmentMailboxes | ? { $_.ExternalDirectoryObjectId -eq $user.id }).mailboxsize.value.tostring().replace(',', '').replace(' ', '').split('b')[0].split('(')[1] / 1024) / 1024) / 1024) 
+    If ($EquipmentMailboxes | Where-Object { $_.ExternalDirectoryObjectId -eq $user.id }) {
+        if (($EquipmentMailboxes | Where-Object { $_.ExternalDirectoryObjectId -eq $user.id }).mailboxsize) {
+            $user.MailboxSizeGB = (((($EquipmentMailboxes | Where-Object { $_.ExternalDirectoryObjectId -eq $user.id }).mailboxsize.value.tostring().replace(',', '').replace(' ', '').split('b')[0].split('(')[1] / 1024) / 1024) / 1024) 
             $user.MailboxSizeGB = [math]::Round($user.MailboxSizeGB, 2)
-            $user.MailboxItemCount = ($EquipmentMailboxes | ? { $_.ExternalDirectoryObjectId -eq $user.id }).ItemCount
+            $user.MailboxItemCount = ($EquipmentMailboxes | Where-Object { $_.ExternalDirectoryObjectId -eq $user.id }).ItemCount
         }
     }
 
 
     ##Set Room Mailbox size and count
-    If ($roommailboxes | ? { $_.ExternalDirectoryObjectId -eq $user.id }) {
-        if (($roommailboxes | ? { $_.ExternalDirectoryObjectId -eq $user.id }).mailboxsize) {
-            $user.MailboxSizeGB = (((($roommailboxes | ? { $_.ExternalDirectoryObjectId -eq $user.id }).mailboxsize.value.tostring().replace(',', '').replace(' ', '').split('b')[0].split('(')[1] / 1024) / 1024) / 1024) 
+    If ($roommailboxes | Where-Object { $_.ExternalDirectoryObjectId -eq $user.id }) {
+        if (($roommailboxes | Where-Object { $_.ExternalDirectoryObjectId -eq $user.id }).mailboxsize) {
+            $user.MailboxSizeGB = (((($roommailboxes | Where-Object { $_.ExternalDirectoryObjectId -eq $user.id }).mailboxsize.value.tostring().replace(',', '').replace(' ', '').split('b')[0].split('(')[1] / 1024) / 1024) / 1024) 
             $user.MailboxSizeGB = [math]::Round($user.MailboxSizeGB, 2)
-            $user.MailboxItemCount = ($roommailboxes | ? { $_.ExternalDirectoryObjectId -eq $user.id }).ItemCount
+            $user.MailboxItemCount = ($roommailboxes | Where-Object { $_.ExternalDirectoryObjectId -eq $user.id }).ItemCount
         }
     }
 
     ##Set archive size and count
-    If ($ArchiveStats | ? { $_.objectID -eq $user.id }) {
-        $user.ArchiveSizeGB = (((($ArchiveStats | ? { $_.objectID -eq $user.id }).totalitemsize.value.tostring().replace(',', '').replace(' ', '').split('b')[0].split('(')[1] / 1024) / 1024) / 1024) 
+    If ($ArchiveStats | Where-Object { $_.objectID -eq $user.id }) {
+        $user.ArchiveSizeGB = (((($ArchiveStats | Where-Object { $_.objectID -eq $user.id }).totalitemsize.value.tostring().replace(',', '').replace(' ', '').split('b')[0].split('(')[1] / 1024) / 1024) / 1024) 
         $user.ArchiveSizeGB = [math]::Round($user.ArchiveSizeGB, 2)
-        $user.ArchiveItemCount = ($ArchiveStats | ? { $_.objectID -eq $user.id }).ItemCount
+        $user.ArchiveItemCount = ($ArchiveStats | Where-Object { $_.objectID -eq $user.id }).ItemCount
     }
 
     ##Set OneDrive Size and count
-    if ($OneDrive | ? { $_.'Owner Principal Name' -eq $user.userPrincipalName }) {
-        if (($OneDrive | ? { $_.'Owner Principal Name' -eq $user.userPrincipalName }).'Storage Used (Byte)') {
+    if ($OneDrive | Where-Object { $_.'Owner Principal Name' -eq $user.userPrincipalName }) {
+        if (($OneDrive | Where-Object { $_.'Owner Principal Name' -eq $user.userPrincipalName }).'Storage Used (Byte)') {
             If ($user.OneDriveSizeGB ) {
-                $user.OneDriveSizeGB = (((($OneDrive | ? { $_.'Owner Principal Name' -eq $user.userPrincipalName }).'Storage Used (Byte)' / 1024) / 1024) / 1024)
+                $user.OneDriveSizeGB = (((($OneDrive | Where-Object { $_.'Owner Principal Name' -eq $user.userPrincipalName }).'Storage Used (Byte)' / 1024) / 1024) / 1024)
                 $user.OneDriveSizeGB = [math]::Round($user.OneDriveSizeGB, 2)
-                $user.OneDriveFileCount = ($OneDrive | ? { $_.'Owner Principal Name' -eq $user.userPrincipalName }).'file count'
+                $user.OneDriveFileCount = ($OneDrive | Where-Object { $_.'Owner Principal Name' -eq $user.userPrincipalName }).'file count'
             }
         }
     }
@@ -842,27 +844,27 @@ Try {
     }
     ##Export Data File##
     ##Export User Accounts tab
-    $users | ? { ($_.usertype -ne "Guest") -and ($_.mailboxtype -eq "User") } | Select-Object Migrate, id, accountenabled, userPrincipalName, mail, targetobjectID, targetUPN, TargetMail, displayName, MailboxItemCount, MailboxSizeGB, OneDriveSizeGB, OneDriveFileCount, MailboxType, ArchiveSizeGB, ArchiveItemCount, givenName, surname, proxyaddresses, 'License SKUs', 'Group License Assignments', 'Disabled Plan IDs', usagelocation, usertype | Export-Excel -Path ("$FilePath\$Filename") -WorksheetName "User Accounts" -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow 
+    $users | Where-Object { ($_.usertype -ne "Guest") -and ($_.mailboxtype -eq "User") } | Select-Object Migrate, id, accountenabled, userPrincipalName, mail, targetobjectID, targetUPN, TargetMail, displayName, MailboxItemCount, MailboxSizeGB, OneDriveSizeGB, OneDriveFileCount, MailboxType, ArchiveSizeGB, ArchiveItemCount, givenName, surname, proxyaddresses, 'License SKUs', 'Group License Assignments', 'Disabled Plan IDs', usagelocation, usertype | Export-Excel -Path ("$FilePath\$Filename") -WorksheetName "User Accounts" -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow 
     ##Export Shared Mailboxes tab
-    $users | ? { ($_.usertype -ne "Guest") -and ($_.mailboxtype -eq "shared") } | Select-Object Migrate, id, accountenabled, userPrincipalName, mail, targetobjectID, targetUPN, TargetMail, displayName, MailboxItemCount, MailboxSizeGB, MailboxType, ArchiveSizeGB, ArchiveItemCount, givenName, surname, proxyaddresses, 'License SKUs', 'Group License Assignments', 'Disabled Plan IDs', usagelocation, usertype | Export-Excel -Path ("$FilePath\$Filename") -WorksheetName "Shared Mailboxes" -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow 
+    $users | Where-Object { ($_.usertype -ne "Guest") -and ($_.mailboxtype -eq "shared") } | Select-Object Migrate, id, accountenabled, userPrincipalName, mail, targetobjectID, targetUPN, TargetMail, displayName, MailboxItemCount, MailboxSizeGB, MailboxType, ArchiveSizeGB, ArchiveItemCount, givenName, surname, proxyaddresses, 'License SKUs', 'Group License Assignments', 'Disabled Plan IDs', usagelocation, usertype | Export-Excel -Path ("$FilePath\$Filename") -WorksheetName "Shared Mailboxes" -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow 
     ##Export Resource Accounts tab
-    $users | ? { ($_.usertype -ne "Guest") -and (($_.mailboxtype -eq "Room") -or ($_.mailboxtype -eq "Equipment")) } | Select-Object Migrate, id, accountenabled, userPrincipalName, mail, targetobjectID, targetUPN, TargetMail, displayName, MailboxItemCount, MailboxSizeGB, MailboxType, ArchiveSizeGB, ArchiveItemCount, givenName, surname, proxyaddresses, 'License SKUs', 'Group License Assignments', 'Disabled Plan IDs', usagelocation, usertype | Export-Excel -Path ("$FilePath\$Filename") -WorksheetName "Resource Accounts" -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow 
+    $users | Where-Object { ($_.usertype -ne "Guest") -and (($_.mailboxtype -eq "Room") -or ($_.mailboxtype -eq "Equipment")) } | Select-Object Migrate, id, accountenabled, userPrincipalName, mail, targetobjectID, targetUPN, TargetMail, displayName, MailboxItemCount, MailboxSizeGB, MailboxType, ArchiveSizeGB, ArchiveItemCount, givenName, surname, proxyaddresses, 'License SKUs', 'Group License Assignments', 'Disabled Plan IDs', usagelocation, usertype | Export-Excel -Path ("$FilePath\$Filename") -WorksheetName "Resource Accounts" -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow 
     ##Export SharePoint Tab
-    $SharePoint | ? { ($_.teamid -eq $null) -and ($_.'Root Web Template' -ne "Team Channel") } | select 'Site ID', 'Site URL', 'Owner Display Name', 'Is Deleted', 'Last Activity Date', 'File Count', 'Active File Count', 'Page View Count', 'Storage Used (Byte)', 'Root Web Template', 'Owner Principal Name' | Export-Excel -Path ("$FilePath\$Filename") -WorksheetName "SharePoint Sites" -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow
+    $SharePoint | Where-Object { ($_.teamid -eq $null) -and ($_.'Root Web Template' -ne "Team Channel") } | Select-Object 'Site ID', 'Site URL', 'Owner Display Name', 'Is Deleted', 'Last Activity Date', 'File Count', 'Active File Count', 'Page View Count', 'Storage Used (Byte)', 'Root Web Template', 'Owner Principal Name' | Export-Excel -Path ("$FilePath\$Filename") -WorksheetName "SharePoint Sites" -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow
     ##Export Teams Tab
-    $TeamGroups | select id, displayname, standardchannels, privatechannels, SharedChannels, Datasize, PrivateChannelsSize, SharedChannelsSize, IncomingSharedChannels, mail, URL, description, createdDateTime, mailEnabled, securityenabled, mailNickname, proxyAddresses, visibility | Export-Excel -Path ("$FilePath\$Filename") -WorksheetName "Teams"  -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow
+    $TeamGroups | Select-Object id, displayname, standardchannels, privatechannels, SharedChannels, Datasize, PrivateChannelsSize, SharedChannelsSize, IncomingSharedChannels, mail, URL, description, createdDateTime, mailEnabled, securityenabled, mailNickname, proxyAddresses, visibility | Export-Excel -Path ("$FilePath\$Filename") -WorksheetName "Teams"  -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow
     ##Export Guest Accounts tab
-    $users | ? { $_.usertype -eq "Guest" } | Select-Object id, accountenabled, userPrincipalName, mail, displayName, givenName, surname, proxyaddresses, 'License SKUs', 'Group License Assignments', 'Disabled Plan IDs', usertype | Export-Excel -Path ("$FilePath\$Filename") -WorksheetName "Guest Accounts" -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow 
+    $users | Where-Object { $_.usertype -eq "Guest" } | Select-Object id, accountenabled, userPrincipalName, mail, displayName, givenName, surname, proxyaddresses, 'License SKUs', 'Group License Assignments', 'Disabled Plan IDs', usertype | Export-Excel -Path ("$FilePath\$Filename") -WorksheetName "Guest Accounts" -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow 
     ##Export AAD Apps Tab
-    $AADApps | ? { $_.publishername -notlike "Microsoft*" } | select createddatetime, displayname, publisherName, signinaudience | Export-Excel -Path ("$FilePath\$Filename") -WorksheetName "AAD Apps" -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow
+    $AADApps | Where-Object { $_.publishername -notlike "Microsoft*" } | Select-Object createddatetime, displayname, publisherName, signinaudience | Export-Excel -Path ("$FilePath\$Filename") -WorksheetName "AAD Apps" -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow
     ##Export Conditional Access Tab
     $CAOutput   | Export-Excel -Path ("$FilePath\$Filename") -WorksheetName "Conditional Access" -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow
     ##Export M365 Apps Usage
     $M365AppsUsage  | Export-Excel -Path ("$FilePath\$Filename") -WorksheetName "M365 Apps Usage" -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow
     ##Export Unified Groups tab
-    $Groups | ? { ($_.grouptypes -Contains "unified") -and ($_.resourceProvisioningOptions -notcontains "Team") } | select id, displayname, mail, description, createdDateTime, mailEnabled, securityenabled, mailNickname, proxyAddresses, visibility, membershipRule | Export-Excel -Path ("$FilePath\$Filename") -WorksheetName "Unified Groups"  -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow
+    $Groups | Where-Object { ($_.grouptypes -Contains "unified") -and ($_.resourceProvisioningOptions -notcontains "Team") } | Select-Object id, displayname, mail, description, createdDateTime, mailEnabled, securityenabled, mailNickname, proxyAddresses, visibility, membershipRule | Export-Excel -Path ("$FilePath\$Filename") -WorksheetName "Unified Groups"  -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow
     ##Export Standard Groups tab
-    $Groups | ? { $_.grouptypes -notContains "unified" } | select id, displayname, mail, description, createdDateTime, mailEnabled, securityenabled, mailNickname, proxyAddresses, visibility, membershipRule | Export-Excel -Path ("$FilePath\$Filename") -WorksheetName "Standard Groups"  -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow
+    $Groups | Where-Object { $_.grouptypes -notContains "unified" } | Select-Object id, displayname, mail, description, createdDateTime, mailEnabled, securityenabled, mailNickname, proxyAddresses, visibility, membershipRule | Export-Excel -Path ("$FilePath\$Filename") -WorksheetName "Standard Groups"  -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow
     ##Export Mail Contacts tab
     $MailContacts | Export-Excel -Path ("$FilePath\$Filename") -WorksheetName "MailContacts" -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow
     ##Export MX Records tab

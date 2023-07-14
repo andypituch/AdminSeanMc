@@ -65,7 +65,7 @@ function New-AadApplicationCertificate {
 ##Monitors connection attempt
 $connected = $false
 ##Name of the app
-$appName = "Tenant Assessment Tool"
+$appName = "Quisitive Tenant Assessment Tool"
 ##The URI of the app - set to localhost
 $appURI = @("https://localhost")
 ##Contain settings of the app reg
@@ -78,7 +78,7 @@ $TenantID = $null
 ##Attempt Azure AD connection until successful
 while ($connected -eq $false) {
     Try {
-        Connect-AzureAD -ErrorAction stop
+        Connect-AzureAD -ErrorAction stop | Format-Table -AutoSize
         $connected = $true
     }
     catch {
@@ -207,8 +207,12 @@ $ConsentURl = $ConsentURl.replace('{tenant-id}', $TenantID)
 $ConsentURl = $ConsentURl.replace('{client-id}', $appReg.AppId)
 
 write-host "Consent page will appear, don't forget to log in as admin to grant consent!" -ForegroundColor Yellow
-Start-Process $ConsentURl
+write-host "`nConsentURL: $ConsentURl`n"
+#Start-Process $ConsentURl
 
-Write-Host "The below details can be used to run the assessment, take note of them and press any button to clear the window.`nTenant ID: $tenantID`nClient ID: $($appReg.appID)`nCertificate Thumbprint: $thumbprint" -ForegroundColor Green
-Pause
-clear
+Write-Host "`nThe below details can be used to run the assessment, take note of them and press any button to clear the window.`nTenant ID: $tenantID`nClient ID: $($appReg.appID)`nCertificate Thumbprint: $thumbprint`n" -ForegroundColor Green
+Write-Host "`nTo run the assessment, please run the following command:`n.\Perform-TenantAssessment.ps1 -clientId $($appReg.appID) -tenantId $tenantID -certificateThumbprint $thumbprint" -ForegroundColor Green
+
+#Pause
+#clear
+Write-Output `n
