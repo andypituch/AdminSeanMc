@@ -143,7 +143,7 @@ $AppReg = Get-AzureADApplication -Filter "DisplayName eq '$($appName)'"  -ErrorA
 
 ##If the app reg already exists, do nothing
 if ($appReg) {
-    write-host "App already exists - Please delete the existing 'Tenant Assessment Tool' app from Azure AD and rerun the preparation script to recreate, exiting" -ForegroundColor yellow
+    write-host "App already exists - Please delete the existing '$appName' app from Azure AD and rerun the preparation script to recreate, exiting" -ForegroundColor yellow
     Pause
     exit
 }
@@ -168,8 +168,8 @@ else {
             $template = Get-AzureADDirectoryRoleTemplate | Where-Object { $_.DisplayName -eq $directoryRole }
             Enable-AzureADDirectoryRole -RoleTemplateId $template.ObjectId
             $RoleId = (Get-AzureADDirectoryRole | Where-Object { $_.displayname -eq $directoryRole }).ObjectID
-
         }
+
         ## Add the service principal to the Exchange directory role
         Add-AzureADDirectoryRoleMember -ObjectId $RoleId -RefObjectId $SP.ObjectID -Verbose
         $directoryRole = 'Exchange Administrator'
@@ -182,7 +182,6 @@ else {
             $template = Get-AzureADDirectoryRoleTemplate | Where-Object { $_.DisplayName -eq $directoryRole }
             Enable-AzureADDirectoryRole -RoleTemplateId $template.ObjectId
             $RoleId = (Get-AzureADDirectoryRole | Where-Object { $_.displayname -eq $directoryRole }).ObjectID
-
         }
         ## Add the service principal to the directory role
         Add-AzureADDirectoryRoleMember -ObjectId $RoleId -RefObjectId $SP.ObjectID -Verbose
@@ -192,13 +191,12 @@ else {
         pause
         exit
     }
-
 }
 
 ##Optional change - Create Client Secret
 #$appSecret = New-AzureADApplicationPasswordCredential -ObjectId $appReg.objectId -CustomKeyIdentifier ((get-date).ToString().Replace('/','')) -StartDate (get-date) -EndDate ((get-date).AddDays(1))
 
-$Thumbprint = New-AadApplicationCertificate -ClientId $appReg.AppId -CertificatePassword "T3mPP@£6hnhskke!!!" -AddToApplication -certificatename "Tenant Assessment Certificate"
+$Thumbprint = New-AadApplicationCertificate -ClientId $appReg.AppId -CertificatePassword "T3mPP@£6hnhskke!!!" -AddToApplication -certificatename "$appName - CertAuth"
 
 ##Get tenant ID
 $tenantID = (Get-AzureADTenantDetail).objectid
@@ -210,7 +208,7 @@ write-host "Consent page will appear, don't forget to log in as admin to grant c
 write-host "`nConsentURL: $ConsentURl`n"
 #Start-Process $ConsentURl
 
-Write-Host "`nThe below details can be used to run the assessment, take note of them and press any button to clear the window.`nTenant ID: $tenantID`nClient ID: $($appReg.appID)`nCertificate Thumbprint: $thumbprint`n" -ForegroundColor Green
+Write-Host "`nThe below details can be used to run the assessment, take note of them.`nTenant ID: $tenantID`nClient ID: $($appReg.appID)`nCertificate Thumbprint: $thumbprint`n" -ForegroundColor Green
 Write-Host "`nTo run the assessment, please run the following command:`n.\Perform-TenantAssessment.ps1 -clientId $($appReg.appID) -tenantId $tenantID -certificateThumbprint $thumbprint" -ForegroundColor Green
 
 #Pause
