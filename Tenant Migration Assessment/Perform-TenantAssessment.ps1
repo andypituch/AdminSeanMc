@@ -124,11 +124,13 @@ $ProgressStatus = "Preparing environment..."
 UpdateProgress
 $ProgressTracker++
 
-$tenantDomain = $($(Get-AcceptedDomain | Where-Object { $_.InitialDomain } | Select-Object -ExpandProperty domainname) -split "\.")[0]
+
 
 ##Declare URI
 $apiuri = $null
 ##Report File Name
+#$tenantDomain = $($(Get-AcceptedDomain | Where-Object { $_.InitialDomain } | Select-Object -ExpandProperty domainname) -split "\.")[0]
+$tenantDomain = "UNNAMED"
 $Filename = "TenantAssessment-$tenantDomain-$(get-date -Format FileDateTime).xlsx"
 ##File Location
 $FilePath = "C:\temp"
@@ -138,7 +140,7 @@ Try {
     }
 }
 catch {
-    write-host "Could not create folder at c:\temp - check you have appropriate permissions" -ForegroundColor red
+    write-host "Could not create folder at '$FilePath' - check you have appropriate permissions" -ForegroundColor red
     exit
 }
 
@@ -257,6 +259,7 @@ $ProgressTracker++
 $apiURI = "https://graph.microsoft.com/beta/servicePrincipals"
 [array]$AADApps = RunQueryandEnumerateResults
 
+<#
 foreach ($user in $users) {
     $user | Add-Member -MemberType NoteProperty -Name "License SKUs" -Value ($user.licenseAssignmentStates.skuid -join ";") -Force
     $user | Add-Member -MemberType NoteProperty -Name "Group License Assignments" -Value ($user.licenseAssignmentStates.assignedByGroup -join ";") -Force
@@ -277,7 +280,7 @@ foreach ($user in $users) {
     }
 
 }
-
+#>
 $ProgressStatus = "Getting Conditional Access policies..."
 UpdateProgress
 $ProgressTracker++
@@ -504,16 +507,22 @@ foreach ($group in $groups) {
 }
 
 ###################EXCHANGE ONLINE############################
-
-$ProgressStatus = "Connecting to Exchange Online..."
+$tenantDomain = ($orgdetails.verifieddomains | Where-Object { $_.isinitial -eq "true" }).name
+$ProgressStatus = "Connecting to Exchange Online ($tenantDomain)..."
 UpdateProgress
 $ProgressTracker++
 
+
+
 Try {
-    Connect-ExchangeOnline -Certificate $Certificate -AppID $clientid -Organization ($orgdetails.verifieddomains | Where-Object { $_.isinitial -eq "true" }).name -ShowBanner:$false
+    Connect-ExchangeOnline `
+        -Certificate $Certificate `
+        -AppID $clientid `
+        -Organization $tenantDomain `
+        -ShowBanner:$false -verbose
 }
 catch {
-    write-host "Error connecting to Exchange Online...Exiting..." -ForegroundColor red
+    write-host "Error connecting to Exchange Online ($tenantDomain)...Exiting..." -ForegroundColor red
     Pause
     Exit
 }
@@ -836,6 +845,11 @@ foreach ($user in ($users | Where-Object { $_.usertype -ne "Guest" })) {
 $ProgressStatus = "Exporting report..."
 UpdateProgress
 $ProgressTracker++
+
+##Report File Name
+$tenantDomain = $($(Get-AcceptedDomain | Where-Object { $_.InitialDomain } | Select-Object -ExpandProperty domainname) -split "\.")[0]
+$Filename = "TenantAssessment-$tenantDomain-$(get-date -Format FileDateTime).xlsx"
+
 Try {
     IF ($TemplatePresent) {
         ##Add cover sheet

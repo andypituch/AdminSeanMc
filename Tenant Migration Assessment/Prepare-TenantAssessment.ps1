@@ -1,24 +1,4 @@
-<##Author: Sean McAvinue
-##Details: PowerShell Script to Configure an Application Registration with the appropriate permissions to run Perform-TenantAssessment.ps1
-##          Please fully read and test any scripts before running in your production environment!
-        .SYNOPSIS
-        Creates an app reg with the appropriate permissions to run the tenant assessment script and uploads a self signed certificate
 
-        .DESCRIPTION
-        Connects to Azure AD and provisions an app reg with the appropriate permissions
-
-        .Notes
-        For similar scripts check out the links below
-        
-            Blog: https://seanmcavinue.net
-            GitHub: https://github.com/smcavinue
-            Twitter: @Sean_McAvinue
-            Linkedin: https://www.linkedin.com/in/sean-mcavinue-4a058874/
-
-
-    #>
-
-##
 #Requires -modules azuread
 function New-AadApplicationCertificate {
     [CmdletBinding(DefaultParameterSetName = 'DefaultSet')]
@@ -90,7 +70,7 @@ while ($connected -eq $false) {
 ##Create Resource Access Variable
 Try {
     $Permissions = New-Object -TypeName "Microsoft.Open.AzureAD.Model.RequiredResourceAccess"
-    ##Declare Application Permission - Reference here: https://docs.microsoft.com/en-us/graph/permissions-reference
+    ##Declare Application Permission - Reference here: https://learn.microsoft.com/en-us/graph/permissions-reference#all-permissions-and-ids
     $permList = @(
         "332a536c-c7ef-4017-ab91-336970924f0d",
         "246dd0d5-5bd0-4def-940b-0421030a5b68",
@@ -196,7 +176,11 @@ else {
 ##Optional change - Create Client Secret
 #$appSecret = New-AzureADApplicationPasswordCredential -ObjectId $appReg.objectId -CustomKeyIdentifier ((get-date).ToString().Replace('/','')) -StartDate (get-date) -EndDate ((get-date).AddDays(1))
 
-$Thumbprint = New-AadApplicationCertificate -ClientId $appReg.AppId -CertificatePassword "T3mPP@£6hnhskke!!!" -AddToApplication -certificatename "$appName - CertAuth"
+$Thumbprint = New-AadApplicationCertificate `
+    -ClientId $appReg.AppId `
+    -CertificatePassword "T3mPP@£6hnhskke!!!" `
+    -AddToApplication `
+    -certificatename "$appName - CertAuth"
 
 ##Get tenant ID
 $tenantID = (Get-AzureADTenantDetail).objectid
