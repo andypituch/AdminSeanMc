@@ -1,4 +1,4 @@
-<##Author: Sean McAvinue
+<# #Author: Sean McAvinue
 ##Details: Graph / PowerShell Script to assess a Microsoft 365 tenant for migration of Exchange, Teams, SharePoint and OneDrive, 
 ##          Please fully read and test any scripts before running in your production environment!
         .SYNOPSIS
@@ -59,10 +59,10 @@ function RunQueryandEnumerateResults {
     [array]$ResultsValue = $Results.value
 
     #If there is a next page, query the next page until there are no more pages and append results to existing set
-    if ($results."@odata.nextLink" -ne $null) {
+    if ($null -ne $results."@odata.nextLink") {
         $NextPageUri = $results."@odata.nextLink"
         ##While there is a next page, query it and loop, append results
-        While ($NextPageUri -ne $null) {
+        While ($null -ne $NextPageUri) {
             $NextPageRequest = (Invoke-RestMethod -Headers @{Authorization = "Bearer $($Token.accesstoken)" } -Uri $NextPageURI -Method Get)
             $NxtPageData = $NextPageRequest.Value
             $NextPageUri = $NextPageRequest."@odata.nextLink"
@@ -77,7 +77,7 @@ function RunQueryandEnumerateResults {
 }
 
 function UpdateProgress {
-    Write-Progress -Activity "Tenant Assessment in Progress" -Status "Processing Task $ProgressTracker of $($TotalProgressTasks): $ProgressStatus" -PercentComplete (($ProgressTracker / $TotalProgressTasks) * 100)
+    Write-Progress -Activity "Tenant Assessment in Progress" -Status $("[$(get-date)] " + "Processing Task $ProgressTracker of $($TotalProgressTasks): $ProgressStatus") -PercentComplete (($ProgressTracker / $TotalProgressTasks) * 100)
 }
 $ProgressTracker = 1
 $TotalProgressTasks = 27
@@ -159,6 +159,43 @@ $ProgressTracker++
 $apiuri = "https://graph.microsoft.com/v1.0/users?`$select=id,userprincipalname,mail,displayname,givenname,surname,licenseAssignmentStates,proxyaddresses,usagelocation,usertype,accountenabled"
 $users = RunQueryandEnumerateResults
 
+$ProgressStatus = "Getting OneDrive report..."
+UpdateProgress
+$ProgressTracker++
+
+##Get OneDrive Report##
+$CertificatePath = "cert:\currentuser\my\$CertificateThumbprint"
+$Certificate = Get-Item $certificatePath
+$Token = Get-MsalToken -ClientId $ClientId -TenantId $TenantId -ClientCertificate $Certificate -ForceRefresh
+$apiUri = "https://graph.microsoft.com/v1.0/reports/getOneDriveUsageAccountDetail(period='D30')"
+$OneDrive = ((Invoke-RestMethod -Headers @{Authorization = "Bearer $($Token.accesstoken)" } -Uri $apiUri -Method Get) | ConvertFrom-Csv)
+#<#
+$OneDrive | Export-Csv .\OneDriveData.csv -NTI -Verbose
+#Pause
+#>
+
+
+$ProgressStatus = "Getting SharePoint report..."
+UpdateProgress
+$ProgressTracker++
+
+##Get SharePoint Report##
+
+$CertificatePath = "cert:\currentuser\my\$CertificateThumbprint"
+$Certificate = Get-Item $certificatePath
+$Token = Get-MsalToken -ClientId $ClientId -TenantId $TenantId -ClientCertificate $Certificate -ForceRefresh
+$apiUri = "https://graph.microsoft.com/v1.0/reports/getSharePointSiteUsageDetail(period='D30')"
+$SharePoint = ((Invoke-RestMethod -Headers @{Authorization = "Bearer $($Token.accesstoken)" } -Uri $apiUri -Method Get) | ConvertFrom-Csv)
+$SharePoint | Add-Member -MemberType NoteProperty -Name "TeamID" -Value "" -force
+foreach ($Site in $Sharepoint) {
+
+    #$TeamID = $null
+    $Site.TeamID = ($TeamGroups | Where-Object { $_.url -contains $site.'site url' }).id
+}
+
+$SharePoint | Export-Csv .\SharePointData.csv -NTI -Verbose
+
+
 $ProgressStatus = "Getting groups..."
 UpdateProgress
 $ProgressTracker++
@@ -234,7 +271,7 @@ foreach ($teamgroup in $TeamGroups) {
     $teamgroup | Add-Member -MemberType NoteProperty -Name "URL" -Value $TeamDetails.webUrl.replace("/Shared%20Documents", "") -Force
 
 }
-
+<#
 $ProgressStatus = "Getting licenses..."
 UpdateProgress
 $ProgressTracker++
@@ -242,6 +279,7 @@ $ProgressTracker++
 ##Get All License SKUs
 $apiuri = "https://graph.microsoft.com/v1.0/subscribedskus"
 $SKUs = RunQueryandEnumerateResults
+#>
 
 $ProgressStatus = "Getting organization details..."
 UpdateProgress
@@ -301,7 +339,7 @@ $apiURI = "https://graph.microsoft.com/v1.0/identity/conditionalAccess/namedLoca
 
 ##Tidy GUIDs to names
 $ConditionalAccessPoliciesJSON = $ConditionalAccessPolicies | ConvertTo-Json -Depth 5
-if ($ConditionalAccessPoliciesJSON -ne $null) {
+if ($null -ne $ConditionalAccessPoliciesJSON) {
     ##TidyUsers
     foreach ($User in $Users) {
         $ConditionalAccessPoliciesJSON = $ConditionalAccessPoliciesJSON.Replace($user.id, ("$($user.displayname) - $($user.userPrincipalName)"))
@@ -403,29 +441,7 @@ if ($ConditionalAccessPoliciesJSON -ne $null) {
     }
 
 }
-$ProgressStatus = "Getting OneDrive report..."
-UpdateProgress
-$ProgressTracker++
 
-##Get OneDrive Report##
-$apiUri = "https://graph.microsoft.com/v1.0/reports/getOneDriveUsageAccountDetail(period='D30')"
-$OneDrive = ((Invoke-RestMethod -Headers @{Authorization = "Bearer $($Token.accesstoken)" } -Uri $apiUri -Method Get) | ConvertFrom-Csv)
-
-$ProgressStatus = "Getting SharePoint report..."
-UpdateProgress
-$ProgressTracker++
-
-##Get SharePoint Report##
-$apiUri = "https://graph.microsoft.com/v1.0/reports/getSharePointSiteUsageDetail(period='D30')"
-$SharePoint = ((Invoke-RestMethod -Headers @{Authorization = "Bearer $($Token.accesstoken)" } -Uri $apiUri -Method Get) | ConvertFrom-Csv)
-$SharePoint | Add-Member -MemberType NoteProperty -Name "TeamID" -Value "" -force
-foreach ($Site in $Sharepoint) {
-
-    $TeamID = $null
-    $Site.TeamID = ($TeamGroups | Where-Object { $_.url -contains $site.'site url' }).id
-
-
-}
 
 $ProgressStatus = "Getting Mailbox Usage report..."
 UpdateProgress
@@ -522,7 +538,7 @@ Try {
         -ShowBanner:$false -verbose
 }
 catch {
-    write-host "Error connecting to Exchange Online ($tenantDomain)...Exiting..." -ForegroundColor red
+    write-host "[$(get-date)] Error connecting to Exchange Online ($tenantDomain)...Exiting..." -ForegroundColor red
     Pause
     Exit
 }
@@ -568,7 +584,7 @@ foreach ($equipment in $EquipmentMailboxes) {
     $i++
     UpdateProgress
 
-    $EquipmentStats = $null
+    $EquipmentStats = $null 
     $EquipmentStats = get-EXOmailboxstatistics $equipment.primarysmtpaddress
     $equipment | Add-Member -MemberType NoteProperty -Name MailboxSize -Value $EquipmentStats.TotalItemSize -Force
     $equipment | Add-Member -MemberType NoteProperty -Name ItemCount -Value $EquipmentStats.ItemCount -Force
@@ -611,8 +627,6 @@ foreach ($user in ($users | Where-Object { ($_.mail -ne $null ) -and ($_.userTyp
     $stats | Add-Member -MemberType NoteProperty -Name ObjectID -Value $user.id -Force
     $stats | Add-Member -MemberType NoteProperty -Name Primarysmtpaddress -Value $user.mail -Force
     $MailboxStats += $stats
-    
-
 }
 
 $ProgressStatus = "Getting archive mailbox statistics..."
