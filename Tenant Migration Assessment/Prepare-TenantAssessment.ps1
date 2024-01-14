@@ -193,7 +193,7 @@ write-host "`nConsentURL: $ConsentURl`n"
 #Start-Process $ConsentURl
 
 Write-Host "`nThe below details can be used to run the assessment, take note of them.`nTenant ID: $tenantID`nClient ID: $($appReg.appID)`nCertificate Thumbprint: $thumbprint`n" -ForegroundColor Green
-Write-Host "`nTo run the assessment, please run the following command:`n.\Perform-TenantAssessment.ps1 -clientId $($appReg.appID) -tenantId $tenantID -certificateThumbprint $thumbprint" -ForegroundColor Green
+Write-Host "`nTo run the assessment, please run the following command:`n.\Perform-TenantAssessment.ps1 -clientId $($appReg.appID) -tenantId $tenantID -certificateThumbprint $thumbprint -IncludeGroupMembership -IncludeMailboxPermissions" -ForegroundColor Green
 
 #Pause
 #clear

@@ -41,6 +41,8 @@ Param(
 
 )
 
+$FileTime = get-date -Format FileDateTime
+
 function RunQueryandEnumerateResults {
     <#
     .SYNOPSIS
@@ -131,9 +133,8 @@ $apiuri = $null
 ##Report File Name
 #$tenantDomain = $($(Get-AcceptedDomain | Where-Object { $_.InitialDomain } | Select-Object -ExpandProperty domainname) -split "\.")[0]
 $tenantDomain = "UNNAMED"
-$Filename = "TenantAssessment-$tenantDomain-$(get-date -Format FileDateTime).xlsx"
 ##File Location
-$FilePath = "C:\temp"
+$FilePath = ".\output"
 Try {
     if (!(test-path -Path $FilePath)) {
         New-Item -Path $FilePath -ItemType Directory
@@ -170,7 +171,7 @@ $Token = Get-MsalToken -ClientId $ClientId -TenantId $TenantId -ClientCertificat
 $apiUri = "https://graph.microsoft.com/v1.0/reports/getOneDriveUsageAccountDetail(period='D30')"
 $OneDrive = ((Invoke-RestMethod -Headers @{Authorization = "Bearer $($Token.accesstoken)" } -Uri $apiUri -Method Get) | ConvertFrom-Csv)
 #<#
-$OneDrive | Export-Csv .\OneDriveData.csv -NTI -Verbose
+#$OneDrive | Export-Csv .\$tenantDomain-OneDriveData-$FileTime.csv -NTI -Verbose
 #Pause
 #>
 
@@ -193,7 +194,7 @@ foreach ($Site in $Sharepoint) {
     $Site.TeamID = ($TeamGroups | Where-Object { $_.url -contains $site.'site url' }).id
 }
 
-$SharePoint | Export-Csv .\SharePointData.csv -NTI -Verbose
+#$SharePoint | Export-Csv .\$tenantDomain-SharePointData-$FileTime.csv -NTI -Verbose
 
 
 $ProgressStatus = "Getting groups..."
@@ -862,7 +863,7 @@ $ProgressTracker++
 
 ##Report File Name
 $tenantDomain = $($(Get-AcceptedDomain | Where-Object { $_.InitialDomain } | Select-Object -ExpandProperty domainname) -split "\.")[0]
-$Filename = "TenantAssessment-$tenantDomain-$(get-date -Format FileDateTime).xlsx"
+$Filename = "$tenantDomain-$FileTime-TenantAssessment.xlsx"
 
 Try {
     IF ($TemplatePresent) {
@@ -915,6 +916,12 @@ Try {
         ##Export Group Membership Tab
         $GroupMembersObject | Export-Excel -Path ("$FilePath\$Filename") -WorksheetName "Group Membership" -AutoSize -AutoFilter -FreezeTopRow -BoldTopRow
     }
+    Write-Output `n`n
+    $OneDrive | Export-Csv $FilePath\$tenantDomain-$FileTime-OneDriveData.csv -NTI -Verbose
+    $SharePoint | Export-Csv $FilePath\$tenantDomain-$FileTime-SharePointData.csv -NTI -Verbose
+
+
+    Write-Output "`n`n[$(get-date)] File export is complete... file located at '$("$FilePath\$Filename")'`n`n"
 }
 catch {
     write-host "Error exporting report, check permissions and make sure the file is not open! $_"
